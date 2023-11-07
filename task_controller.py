@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+from scapy.all import *  # you can use scapy in this task
 import pox.openflow.libopenflow_01 as of
 
 # KAIST CS341 SDN Lab Task 2, 3, 4
@@ -17,20 +18,20 @@ import pox.openflow.libopenflow_01 as of
 #           - let the switch route the packet
 #           - drop the packet
 #
-# Task 2: Getting familiarized with POX 
+# Task 2: Getting familiarized with POX
 #   - Let switches "flood" packets
 #   - This is not graded
-# 
+#
 # Task 3: Implementing a Simple Routing Protocol
 #   - Let switches route via Dijkstra
 #   - Match ARP and ICMP over IPv4 packets
 #
-# Task 4: Implementing simple DNS censorship 
+# Task 4: Implementing simple DNS censorship
 #   - Let switches send DNS packets to Controller
 #       - By default, switches will send unhandled packets to controller
 #   - Drop DNS requests for asking cs341dangerous.com, relay all other packets correctly
 #
-# Task 5: Implementing simple HTTP censorship 
+# Task 5: Implementing simple HTTP censorship
 #   - Let switches send HTTP packets to Controller
 #       - By default, switches will send unhandled packets to controller
 #   - Additionally, drop HTTP requests for heading cs341dangerous.com, relay all other packets correctlys
@@ -38,12 +39,24 @@ import pox.openflow.libopenflow_01 as of
 
 ###
 # If you want, you can define global variables, import libraries, or do others
+class Node:
+    def __init__(self, name, ip, is_host):
+        self.name = name
+        self.ip = ip
+        self.is_host = is_host
+        self.port = dict()  # {1: [Node(...), Node(...)], ...}
+        # self.neighbors = dict()
+
+
+nodes = dict()  # {'h1': Node(name, IP, true), 's1': Node(name, None, false), ...}
+links = dict()  # {'h1': [('h2', 1), ('h3', 2), ...], ...}
 ###
+
 
 def init(net) -> None:
     #
     # net argument has following structure:
-    # 
+    #
     # net = {
     #    'hosts': {
     #         'h1': {
@@ -69,9 +82,38 @@ def init(net) -> None:
     # }
     #
     ###
-    # YOUR CODE HERE
+    global nodes, links
+
+    hosts = list(net['hosts'].values())
+    switches = list(net['switches'].values())
+    raw_links = []
+
+    for host in hosts:
+        nodes[host['name']] = Node(host['name'], host['IP'], True)
+        raw_links.extend(host['links'])
+    
+    for switch in switches:
+        nodes[switch['name']] = Node(switch['name'], None, False)
+        raw_links.extend(switch['links'])
+
+    for (n1, p1, n2, p2, c) in raw_links:
+        # print("nodes[n1] is type of", type(nodes[n1]))
+        # print("nodes[n1].port is type of", type(nodes[n1].port))
+        if not nodes[n1].port.get(p1):  # empty list
+            nodes[n1].port[p1] = []
+        nodes[n1].port[p1].append(nodes[n2])
+        if not nodes[n2].port.get(p2):
+            nodes[n2].port[p2] = []
+        nodes[n2].port[p2].append(nodes[n1])
+        if not links.get(n1):
+            links[n1] = []
+        links[n1].append((n2, c))
+        if not links.get(n2):
+            links[n2] = []
+        links[n2].append((n1, c))
     ###
-    pass
+
+
 
 def addrule(switchname: str, connection) -> None:
     #
@@ -88,10 +130,11 @@ def addrule(switchname: str, connection) -> None:
     # connection.send(msg)
     ###
     # YOUR CODE HERE
+    msg = of.ofp_flow_mod()
+    msg.actions.append(of.ofp_action_output(port=of.OFPP_FLOOD))
+    connection.send(msg)
     ###
-    pass
 
-from scapy.all import * # you can use scapy in this task
 
 def handlePacket(switchname, event, connection):
     packet = event.parsed
@@ -119,7 +162,7 @@ def handlePacket(switchname, event, connection):
         if isinstance(p, bytes):
             break
         p = p.next
-    print(packet.dump()) # print out unhandled packets
+    print(packet.dump())  # print out unhandled packets
     # How to know protocol header types? see name of class
 
     # If you want to send packet back to switch, you can use of.ofp_packet_out() message.

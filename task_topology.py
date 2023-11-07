@@ -17,7 +17,12 @@ class Topology(Topo):
         #        The third component represents cost of the link; not used in this task
                 
         ###
-        # YOUR CODE HERE
+        for switch in switches:
+            self.addSwitch(switch)
+        for host in hosts:
+            self.addHost(host)
+        for link in links:
+            self.addLink(link[0], link[1])
         ###
 
         '''
@@ -26,4 +31,3 @@ class Topology(Topo):
         self.addHost('h1')
         self.addLink('s1', 'h1')
         '''
-        pass
