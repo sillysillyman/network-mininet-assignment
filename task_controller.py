@@ -48,8 +48,10 @@ class Node:
         # self.neighbors = dict()
 
 
-nodes = dict()  # {'h1': Node(name, IP, true), 's1': Node(name, None, false), ...}
-links = dict()  # {'h1': [('h2', 1), ('h3', 2), ...], ...}
+INF = 2**31
+# {'h1': (Node(name, IP, true), 0), 's1': (Node(name, None, false), 1), ...}
+nodes = dict()
+links = []  # 2D-array for dijkstra
 ###
 
 
@@ -84,35 +86,38 @@ def init(net) -> None:
     ###
     global nodes, links
 
+    idx = 0
     hosts = list(net['hosts'].values())
     switches = list(net['switches'].values())
+
+    size = len(hosts) + len(switches)
+    links = [[INF]*size for _ in range(size)]  # n by n 2D-array, n = size
     raw_links = []
 
     for host in hosts:
-        nodes[host['name']] = Node(host['name'], host['IP'], True)
+        nodes[host['name']] = (Node(host['name'], host['IP'], True), idx)
         raw_links.extend(host['links'])
-    
+        idx += 1
+
     for switch in switches:
-        nodes[switch['name']] = Node(switch['name'], None, False)
+        nodes[switch['name']] = (Node(switch['name'], None, False), idx)
         raw_links.extend(switch['links'])
+        idx += 1
 
     for (n1, p1, n2, p2, c) in raw_links:
         # print("nodes[n1] is type of", type(nodes[n1]))
         # print("nodes[n1].port is type of", type(nodes[n1].port))
-        if not nodes[n1].port.get(p1):  # empty list
-            nodes[n1].port[p1] = []
-        nodes[n1].port[p1].append(nodes[n2])
-        if not nodes[n2].port.get(p2):
-            nodes[n2].port[p2] = []
-        nodes[n2].port[p2].append(nodes[n1])
-        if not links.get(n1):
-            links[n1] = []
-        links[n1].append((n2, c))
-        if not links.get(n2):
-            links[n2] = []
-        links[n2].append((n1, c))
-    ###
+        if not nodes[n1][0].port.get(p1):
+            nodes[n1][0].port[p1] = []
+        nodes[n1][0].port[p1].append(nodes[n2][0])
+        if not nodes[n2][0].port.get(p2):
+            nodes[n2][0].port[p2] = []
+        nodes[n2][0].port[p2].append(nodes[n1][0])
 
+        n1_idx = nodes[n1][1]
+        n2_idx = nodes[n2][1]
+        links[n1_idx][n2_idx] = c
+    ###
 
 
 def addrule(switchname: str, connection) -> None:
@@ -133,6 +138,9 @@ def addrule(switchname: str, connection) -> None:
     msg = of.ofp_flow_mod()
     msg.actions.append(of.ofp_action_output(port=of.OFPP_FLOOD))
     connection.send(msg)
+
+    def dijkstra():
+        pass
     ###
 
 
