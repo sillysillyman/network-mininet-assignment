@@ -44,13 +44,12 @@ class Node:
         self.name = name
         self.ip = ip
         self.is_host = is_host
-        self.port = dict()  # {1: [Node(...), Node(...)], ...}
+        # self.port = {}  # {1: [Node(...), Node(...)], ...}
+        self.port = {}  # {1: Node(...), 2: Node(...), ...}
         # self.neighbors = dict()
 
-
-INF = 2**31
 # {'h1': (Node(name, IP, true), 0), 's1': (Node(name, None, false), 1), ...}
-nodes = dict()
+nodes = {}
 links = []  # 2D-array for dijkstra
 ###
 
@@ -91,32 +90,72 @@ def init(net) -> None:
     switches = list(net['switches'].values())
 
     size = len(hosts) + len(switches)
-    links = [[INF]*size for _ in range(size)]  # n by n 2D-array, n = size
+    links = [[0]*size for _ in range(size)]  # n by n 2D-array, n = size
     raw_links = []
 
     for host in hosts:
         nodes[host['name']] = (Node(host['name'], host['IP'], True), idx)
         raw_links.extend(host['links'])
+        # print(f"host link: {host['links']}")
         idx += 1
 
     for switch in switches:
         nodes[switch['name']] = (Node(switch['name'], None, False), idx)
         raw_links.extend(switch['links'])
+        # print(f"switch link: {switch['links']}")
         idx += 1
-
+    
+    # ('s1', 2, 'h1', 1, 3)
     for (n1, p1, n2, p2, c) in raw_links:
         # print("nodes[n1] is type of", type(nodes[n1]))
         # print("nodes[n1].port is type of", type(nodes[n1].port))
-        if not nodes[n1][0].port.get(p1):
-            nodes[n1][0].port[p1] = []
-        nodes[n1][0].port[p1].append(nodes[n2][0])
-        if not nodes[n2][0].port.get(p2):
-            nodes[n2][0].port[p2] = []
-        nodes[n2][0].port[p2].append(nodes[n1][0])
+        # if not nodes[n1][0].port.get(p1):
+            # nodes[n1][0].port[p1] = []
+        # nodes[n1][0].port[p1].append(nodes[n2][0])
+        nodes[n1][0].port[p1] = nodes[n2][0]
+        # if not nodes[n2][0].port.get(p2):
+            # nodes[n2][0].port[p2] = []
+        # nodes[n2][0].port[p2].append(nodes[n1][0])
+        nodes[n2][0].port[p2] = nodes[n1][0]
+
+        # print(f"{n1} port: {nodes[n1][0].port}")
+        # print(f"{n2} port: {nodes[n2][0].port}")
+        # print()
 
         n1_idx = nodes[n1][1]
         n2_idx = nodes[n2][1]
+        # links[n1_idx][n2_idx] = c//1000000 # for easy looking
         links[n1_idx][n2_idx] = c
+    #   print(f"c = {c}\n")
+    # print(f"nodes: {nodes}")
+    # nodes: {
+    #   'h1': (<task_controller.Node object at 0xffff9692c730>, 0),
+    #   'h2': (<task_controller.Node object at 0xffff9692c820>, 1),
+    #   'h3': (<task_controller.Node object at 0xffff9692c880>, 2),
+    #   's1': (<task_controller.Node object at 0xffff9692c8e0>, 3),
+    #   's2': (<task_controller.Node object at 0xffff9692c940>, 4),
+    #   's3': (<task_controller.Node object at 0xffff9692c9a0>, 5),
+    #   's4': (<task_controller.Node object at 0xffff9692ca00>, 6),
+    #   's5': (<task_controller.Node object at 0xffff9692ca60>, 7)
+    # }
+    # print("links:")
+    # for i in range(len(links)):
+    #     for k, v in nodes.items():
+    #         if i == v[1]:
+    #             name = k
+    #     print(f"{name}: {links[i]}")
+    # print()
+    # links: [
+    #   [0, 0, 0, 0, 0, 640831880, 0, 0],
+    #   [0, 0, 0, 0, 0, 607600251, 0, 0],
+    #   [0, 0, 0, 0, 0, 641737572, 0, 0],
+    #   [0, 0, 0, 0, 484323490, 0, 496946398, 847755442],
+    #   [0, 0, 0, 484323490, 0, 0,  668731125, 901375772],
+    #   [640831880, 607600251, 641737572, 0, 0, 0, 167978657, 0],
+    #   [0, 0, 0, 496946398, 668731125, 167978657, 0, 91331181],
+    #   [0, 0, 0, 847755442, 901375772, 0, 91331181, 0]
+    # ]
+
     ###
 
 
@@ -135,12 +174,61 @@ def addrule(switchname: str, connection) -> None:
     # connection.send(msg)
     ###
     # YOUR CODE HERE
-    msg = of.ofp_flow_mod()
-    msg.actions.append(of.ofp_action_output(port=of.OFPP_FLOOD))
-    connection.send(msg)
+    global nodes, links
 
-    def dijkstra():
-        pass
+    # Task 2
+    # msg = of.ofp_flow_mod(action=of.ofp_action_output(port=of.OFPP_FLOOD))
+    # connection.send(msg)
+
+    def dijkstra(name, links):
+        # print(f"name: {name}")
+        INF = 2**31
+        size = len(links)
+        idx = nodes[name][1]
+        dist = [INF]*size
+        visited = [False]*size
+
+        for i in range(size):
+            if links[idx][i] == 0:
+                continue
+            dist[i] = links[idx][i]
+        
+        dist[idx] = 0
+        visited[idx] = True
+        for _ in range(size - 1):
+            # print(f"dist: {dist}")
+            min = INF
+            min_node_idx = -1
+            for i in range(size):
+                if (dist[i] < min and not visited[i]):
+                    min = dist[i]
+                    min_node_idx = i
+            # print(f"min_node_idx: {min_node_idx}")
+            visited[min_node_idx] = True
+            for i in range(size):
+                if not visited[i] and links[min_node_idx][i]:
+                    if dist[min_node_idx] + links[min_node_idx][i] < dist[i]:
+                        dist[i] = dist[min_node_idx] + links[min_node_idx][i]
+        return dist
+    
+    dist = dijkstra(switchname, links)
+    # print(f"returned dist: {dist}")
+    print()
+
+    for name, (node, idx) in nodes.items():
+        ports = [n.name for n in node.port.values()]
+        if node.is_host and switchname in ports:
+            # port = node.port[switchname][0]
+            for k, v in node.port.items():
+                if v.name == switchname:
+                    port = k
+            msg = of.ofp_flow_mod()
+            msg.match = of.ofp_match()
+            msg.match.dl_type = 0x806  # IPv4
+            msg.match.nw_dst = node.ip
+            msg.actions.append(of.ofp_action_output(port=port))
+            connection.send(msg)  
+
     ###
 
 
