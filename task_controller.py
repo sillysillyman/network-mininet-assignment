@@ -109,30 +109,25 @@ def init(net) -> None:
     for (n1, p1, n2, p2, c) in raw_links:
         # print("nodes[n1] is type of", type(nodes[n1]))
         # print("nodes[n1].port is type of", type(nodes[n1].port))
-        # if not nodes[n1][0].port.get(p1):
-            # nodes[n1][0].port[p1] = []
-        # nodes[n1][0].port[p1].append(nodes[n2][0])
         nodes[n1][0].port[p1] = nodes[n2][0]
-        # if not nodes[n2][0].port.get(p2):
-            # nodes[n2][0].port[p2] = []
-        # nodes[n2][0].port[p2].append(nodes[n1][0])
         nodes[n2][0].port[p2] = nodes[n1][0]
 
-        print(f"{n1} port: {nodes[n1][0].port}")
-        print(f"{n2} port: {nodes[n2][0].port}")
+        # print(f"{n1} port: {nodes[n1][0].port}")
+        # print(f"{n2} port: {nodes[n2][0].port}")
         # print()
 
         n1_idx = nodes[n1][1]
         n2_idx = nodes[n2][1]
-        links[n1_idx][n2_idx] = c//10000000 # for easy looking
-        links[n2_idx][n1_idx] = c//10000000 # for easy looking
-        # links[n1_idx][n2_idx] = c
+        # links[n1_idx][n2_idx] = c//10000000 # for easy looking
+        # links[n2_idx][n1_idx] = c//10000000 # for easy looking
+        links[n1_idx][n2_idx] = c
+        links[n2_idx][n1_idx] = c
     #   print(f"c = {c}\n")
     # print(f"nodes: {nodes}")
-    print("nodes:")
-    for name, (node, _) in nodes.items():
-        print(f"    {name}: {node}")
-    print()
+    # print("nodes:")
+    # for name, (node, _) in nodes.items():
+    #     print(f"    {name}: {node}")
+    # print()
     # nodes: {
     #   'h1': (<task_controller.Node object at 0xffff9692c730>, 0),
     #   'h2': (<task_controller.Node object at 0xffff9692c820>, 1),
@@ -143,13 +138,13 @@ def init(net) -> None:
     #   's4': (<task_controller.Node object at 0xffff9692ca00>, 6),
     #   's5': (<task_controller.Node object at 0xffff9692ca60>, 7)
     # }
-    print("links:")
-    for i in range(len(links)):
-        for name, (_, idx) in nodes.items():
-            if i == idx:
-                link_name = name
-        print(f"    {link_name}: {links[i]}")
-    print()
+    # print("links:")
+    # for i in range(len(links)):
+    #     for name, (_, idx) in nodes.items():
+    #         if i == idx:
+    #             link_name = name
+    #     print(f"    {link_name}: {links[i]}")
+    # print()
     # links: [
     #   [0, 0, 0, 0, 0, 640831880, 0, 0],
     #   [0, 0, 0, 0, 0, 607600251, 0, 0],
@@ -231,9 +226,9 @@ def addrule(switchname: str, connection) -> None:
         return packet_paths
     
     paths = dijkstra(switchname, links)
-    print(f"switchname = {switchname}")
-    print(f"paths: {paths}")
-    print()
+    # print(f"switchname = {switchname}")
+    # print(f"paths: {paths}")
+    # print()
 
     switch = nodes[switchname][0]
     for path in paths:
@@ -248,21 +243,16 @@ def addrule(switchname: str, connection) -> None:
             continue
         node = nodes[path[-1]][0]
         
-        connection.send(of.ofp_flow_mod(action=of.ofp_action_output(port=port), match = of.ofp_match(dl_type=0x806, nw_dst = node.ip))) # ARP
-    # for name, (node, idx) in nodes.items():
-    #     ports = [n.name for n in node.port.values()]
-    #     if node.is_host and switchname in ports:
-    #         # port = node.port[switchname][0]
-    #         for k, v in node.port.items():
-    #             if v.name == switchname:
-    #                 port = k
-    #         msg = of.ofp_flow_mod()
-    #         msg.match = of.ofp_match()
-    #         msg.match.dl_type = 0x806  # IPv4
-    #         msg.match.nw_dst = node.ip
-    #         msg.actions.append(of.ofp_action_output(port=port))
-    #         connection.send(msg)  
-
+        connection.send(of.ofp_flow_mod(
+            action=of.ofp_action_output(port=port),
+            match=of.ofp_match(dl_type=0x806,
+            nw_dst=node.ip)
+        )) # handle ARP packets
+        connection.send(of.ofp_flow_mod(
+            action=of.ofp_action_output(port=port),
+            match=of.ofp_match(dl_type=0x800,
+            nw_dst=node.ip)
+        )) # handle IPv4 packets
     ###
 
 
