@@ -118,16 +118,21 @@ def init(net) -> None:
         # nodes[n2][0].port[p2].append(nodes[n1][0])
         nodes[n2][0].port[p2] = nodes[n1][0]
 
-        # print(f"{n1} port: {nodes[n1][0].port}")
-        # print(f"{n2} port: {nodes[n2][0].port}")
+        print(f"{n1} port: {nodes[n1][0].port}")
+        print(f"{n2} port: {nodes[n2][0].port}")
         # print()
 
         n1_idx = nodes[n1][1]
         n2_idx = nodes[n2][1]
-        # links[n1_idx][n2_idx] = c//1000000 # for easy looking
-        links[n1_idx][n2_idx] = c
+        links[n1_idx][n2_idx] = c//10000000 # for easy looking
+        links[n2_idx][n1_idx] = c//10000000 # for easy looking
+        # links[n1_idx][n2_idx] = c
     #   print(f"c = {c}\n")
     # print(f"nodes: {nodes}")
+    print("nodes:")
+    for name, (node, _) in nodes.items():
+        print(f"    {name}: {node}")
+    print()
     # nodes: {
     #   'h1': (<task_controller.Node object at 0xffff9692c730>, 0),
     #   'h2': (<task_controller.Node object at 0xffff9692c820>, 1),
@@ -138,13 +143,13 @@ def init(net) -> None:
     #   's4': (<task_controller.Node object at 0xffff9692ca00>, 6),
     #   's5': (<task_controller.Node object at 0xffff9692ca60>, 7)
     # }
-    # print("links:")
-    # for i in range(len(links)):
-    #     for k, v in nodes.items():
-    #         if i == v[1]:
-    #             name = k
-    #     print(f"{name}: {links[i]}")
-    # print()
+    print("links:")
+    for i in range(len(links)):
+        for name, (_, idx) in nodes.items():
+            if i == idx:
+                link_name = name
+        print(f"    {link_name}: {links[i]}")
+    print()
     # links: [
     #   [0, 0, 0, 0, 0, 640831880, 0, 0],
     #   [0, 0, 0, 0, 0, 607600251, 0, 0],
@@ -185,8 +190,10 @@ def addrule(switchname: str, connection) -> None:
         INF = 2**31
         size = len(links)
         idx = nodes[name][1]
+        # dist = [[[], INF]]*size
         dist = [INF]*size
         visited = [False]*size
+        packet_paths = [[] for _ in range(size)]
 
         for i in range(size):
             if links[idx][i] == 0:
@@ -195,6 +202,7 @@ def addrule(switchname: str, connection) -> None:
         
         dist[idx] = 0
         visited[idx] = True
+        
         for _ in range(size - 1):
             # print(f"dist: {dist}")
             min = INF
@@ -203,31 +211,57 @@ def addrule(switchname: str, connection) -> None:
                 if (dist[i] < min and not visited[i]):
                     min = dist[i]
                     min_node_idx = i
-            # print(f"min_node_idx: {min_node_idx}")
             visited[min_node_idx] = True
             for i in range(size):
                 if not visited[i] and links[min_node_idx][i]:
                     if dist[min_node_idx] + links[min_node_idx][i] < dist[i]:
                         dist[i] = dist[min_node_idx] + links[min_node_idx][i]
-        return dist
+                        for name, (_, idx) in nodes.items():
+                            if idx == min_node_idx:
+                                packet_paths[i] = []
+                                packet_paths[i].extend(packet_paths[min_node_idx])
+                                packet_paths[i].append(name)
+        for i in range(size):
+            for name, (node, idx) in nodes.items():
+                if idx == i:
+                    packet_paths[i].append(name)
+                    break
+        # print(f"packet_path: {packet_paths}")
+
+        return packet_paths
     
-    dist = dijkstra(switchname, links)
-    # print(f"returned dist: {dist}")
+    paths = dijkstra(switchname, links)
+    print(f"switchname = {switchname}")
+    print(f"paths: {paths}")
     print()
 
-    for name, (node, idx) in nodes.items():
-        ports = [n.name for n in node.port.values()]
-        if node.is_host and switchname in ports:
-            # port = node.port[switchname][0]
-            for k, v in node.port.items():
-                if v.name == switchname:
-                    port = k
-            msg = of.ofp_flow_mod()
-            msg.match = of.ofp_match()
-            msg.match.dl_type = 0x806  # IPv4
-            msg.match.nw_dst = node.ip
-            msg.actions.append(of.ofp_action_output(port=port))
-            connection.send(msg)  
+    switch = nodes[switchname][0]
+    for path in paths:
+        if path[0] == switchname:
+            continue
+        one_hop_after_name = path[0]
+        port = -1
+        for node_port, linked_node in switch.port.items():
+            if linked_node.name == one_hop_after_name:
+                port = node_port
+        if port == -1:
+            continue
+        node = nodes[path[-1]][0]
+        
+        connection.send(of.ofp_flow_mod(action=of.ofp_action_output(port=port), match = of.ofp_match(dl_type=0x806, nw_dst = node.ip))) # ARP
+    # for name, (node, idx) in nodes.items():
+    #     ports = [n.name for n in node.port.values()]
+    #     if node.is_host and switchname in ports:
+    #         # port = node.port[switchname][0]
+    #         for k, v in node.port.items():
+    #             if v.name == switchname:
+    #                 port = k
+    #         msg = of.ofp_flow_mod()
+    #         msg.match = of.ofp_match()
+    #         msg.match.dl_type = 0x806  # IPv4
+    #         msg.match.nw_dst = node.ip
+    #         msg.actions.append(of.ofp_action_output(port=port))
+    #         connection.send(msg)  
 
     ###
 
