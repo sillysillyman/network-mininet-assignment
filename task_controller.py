@@ -217,7 +217,7 @@ def addrule(switchname: str, connection) -> None:
                                 packet_paths[i].extend(packet_paths[min_node_idx])
                                 packet_paths[i].append(name)
         for i in range(size):
-            for name, (node, idx) in nodes.items():
+            for name, (_, idx) in nodes.items():
                 if idx == i:
                     packet_paths[i].append(name)
                     break
